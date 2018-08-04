@@ -1,0 +1,6 @@
+# VIM's .swp files
+*.swp
+
+# Compiled python objects
+__pycache__
+*.pyc
