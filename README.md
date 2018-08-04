@@ -3,7 +3,7 @@ Python bindings for c´t-lab
 
 This project contains some python bindings for the c´t-lab electronics
 measuring- and controlling system. c´t-lab was developed by Carsten Mayer,
-a reporter at the german IT magazine c´t. For details on c´t-lab see
+a reporter at the german IT magazine c´t, and others. For details on c´t-lab see
 www.ct-lab.de, but be aware c´t-lab is about to age already and I'm not sure
 how long those sites will exist.
 
