@@ -57,7 +57,7 @@ class bipolar_transistor_characteristics:
         # List of tuples (B-E voltage, B-E current, C-E voltage, C-E current, C-E current limited)
         values = []
 
-        for base_voltage in np.arange(-0.3, self.max_base_voltage + 0.005, 0.005):
+        for base_voltage in np.arange(-0.3, np.amin([self.max_base_voltage + 0.005, 10.]), 0.005):
             try:
                 self.adaio.set_da12(0, base_voltage)
                 base_voltage_read = self.adaio.query_da12(0)
