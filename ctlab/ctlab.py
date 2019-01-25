@@ -441,25 +441,500 @@ class ADA_IO(Module):
         if chid >= 0 and chid <= 7 or chid >= 10 and chid <= 17 or chid >= 20 and chid <= 27:
             self.values[chid] = float(value)
             self.updated[chid] = True
+
+
+class EDL(Module):
+    # Modes of operation
+    RNG_OFF     = 0
+    RNG_I_HIGH  = 1
+    RNG_I_LOW   = 2
+    RNG_R_HIGH  = 3
+    RNG_R_LOW   = 4
+    RNG_P_HIGH  = 5
+    RNG_P_LOW   = 6
+
+    RNG_VALUES = (RNG_OFF, RNG_I_HIGH, RNG_I_LOW, RNG_R_HIGH, RNG_R_LOW,
+            RNG_P_HIGH, RNG_P_LOW)
+
+    # Display menus
+    DSP_I       = 0
+    DSP_U       = 1
+    DSP_MODE    = 2
+    DSP_TON     = 3
+    DSP_TOFF    = 4
+    DSP_IOFF    = 5
+    DSP_TRACK   = 6
+
+    DSP_VALUES = (DSP_I, DSP_U, DSP_MODE, DSP_TON, DSP_TOFF, DSP_IOFF,
+            DSP_TRACK)
+
+    def __init__(self, id, connection = None):
+        super().__init__(id, connection = connection)
+        self.status = {
+                'trm': 0
+                }
+
+    # Value change functions
+    def set_ena(self, ena):
+        self.set_subch(0, '1' if ena else '0')
+
+    def set_dca(self, dca):
+        self.set_subch(1, dca)
+
+    def set_dcp(self, dcp):
+        self.set_subch(3, dcp)
+
+    def set_dcv(self, dcv):
+        """
+        UVLO
+        """
+        self.set_subch(4, dcv)
+
+    def set_dcr(self, dcr):
+        self.set_subch(5, dcr)
+
+    def reset_mah(self):
+        self.set_subch(8, 0)
+
+    def reset_mwh(self):
+        self.set_subch(9, 0)
+
+    def set_rng(self, rng):
+        self.set_subch(19, rng)
+
+    def set_pca(self, pca):
+        self.set_subch(21, pca)
+
+    def set_ron(self, ron):
+        self.set_subch(27, ron)
+
+    def set_roff(self, roff):
+        self.set_subch(28, roff)
+
+    def set_rip(self, rip):
+        self.set_subch(29, rip)
+
+    def set_dsp(self, dsp):
+        if dsp > 6 or dsp < 0:
+            raise InvalidParameterException()
+
+        self.set_subch(80, dsp)
+
+    def set_trig_in_enabled(self, en):
+        m = 0x1 if en else 0
+
+        if m ^ self.status['trm']:
+            self.status['trm'] = self.status['trm'] ^ m
+            self.set_subch(240, self.status['trm'])
+
+    def set_auto_trig_enabled(self, en):
+        m = 0x02 if en else 0
+
+        if m ^ self.status['trm']:
+            self.status['trm'] = self.status['trm'] ^ m
+            self.set_subch(240, self.status['trm'])
+
+    # Asynchronous query functions
+    def req_ena(self):
+        self.req_subch(0)
+
+    def req_dca(self):
+        self.req_subch(1)
+
+    def req_dcp(self):
+        self.req_subch(3)
+
+    def req_dcv(self):
+        self.req_subch(4)
+
+    def req_dcr(self):
+        self.req_subch(5)
+
+    def req_mah(self):
+        self.req_subch(8)
+
+    def req_mwh(self):
+        self.req_subch(9)
+
+    def req_msv_on(self):
+        self.req_subch(10)
+
+    def req_msa_on(self):
+        self.req_subch(11)
+
+    def req_msv_off(self):
+        self.req_subch(15)
+
+    def req_msa_off(self):
+        self.req_subch(16)
+
+    def req_rng(self):
+        self.req_subch(19)
+
+    def req_msw(self):
+        self.req_subch(18)
+
+    def req_pca(self):
+        self.req_subch(21)
+
+    def req_ron(self):
+        self.req_subch(27)
+
+    def req_roff(self):
+        self.req_subch(28)
+
+    def req_rip(self):
+        self.req_subch(29)
+
+    def req_dsp(self):
+        self.req_subch(80)
+
+    def req_trm(self):
+        self.req_subch(240)
+
+    def req_all(self):
+        """
+        All measurements including offsets (?)
+        """
+        self.req_subch(99)
+
+    def req_tmp(self):
+        self.req_subch(233)
+
+
+    def get_ena(self):
+        if 'ena' in self.values:
+            return self.values['ena']
+        else:
+            raise NoValueException()
+
+    def get_dca(self):
+        if 'dca' in self.values:
+            return self.values['dca']
+        else:
+            raise NoValueException()
+
+    def get_dcp(self):
+        if 'dcp' in self.values:
+            return self.values['dcp']
+        else:
+            raise NoValueException()
+
+    def get_dcv(self):
+        if 'dcv' in self.values:
+            return self.values['dcv']
+        else:
+            raise NoValueException()
+
+    def get_dcr(self):
+        if 'dcr' in self.values:
+            return self.values['dcr']
+        else:
+            raise NoValueException()
+
+    def get_mah(self):
+        if 'mah' in self.values:
+            return self.values['mah']
+        else:
+            raise NoValueException()
+
+    def get_mwh(self):
+        if 'mwh' in self.values:
+            return self.values['mwh']
+        else:
+            raise NoValueException()
+
+    def get_msv_on(self):
+        if 'msv_on' in self.values:
+            return self.values['msv_on']
+        else:
+            raise NoValueException()
+
+    def get_msa_on(self):
+        if 'msa_on' in self.values:
+            return self.values['msa_on']
+        else:
+            raise NoValueException()
+
+    def get_msv_off(self):
+        if 'msv_off' in self.values:
+            return self.values['msv_off']
+        else:
+            raise NoValueException()
+
+    def get_msa_off(self):
+        if 'msa_off' in self.values:
+            return self.values['msa_off']
+        else:
+            raise NoValueException()
+
+    def get_rng(self):
+        if 'rng' in self.values:
+            return self.values['rng']
+        else:
+            raise NoValueException()
+
+    def get_msw(self):
+        if 'msw' in self.values:
+            return self.values['msw']
+        else:
+            raise NoValueException()
+
+    def get_pca(self):
+        if 'pca' in self.values:
+            return self.values['pca']
+        else:
+            raise NoValueException()
+
+    def get_ron(self):
+        if 'ron' in self.values:
+            return self.values['ron']
+        else:
+            raise NoValueException()
+
+    def get_roff(self):
+        if 'roff' in self.values:
+            return self.values['roff']
+        else:
+            raise NoValueException()
+
+    def get_rip(self):
+        if 'rip' in self.values:
+            return self.values['rip']
+        else:
+            raise NoValueException()
+
+    def get_dsp(self):
+        if 'dsp' in self.values:
+            return self.values['dsp']
+        else:
+            raise NoValueException()
+
+    def get_trm(self):
+        return self.status['trm']
+
+    def get_tmp(self):
+        if 'tmp' in self.values:
+            return self.values['tmp']
+        else:
+            raise NoValueException()
+
+
+    # Synchronous query functions
+    def query_ena(self):
+        self.req_ena()
+        self.wait_updated(0)
+        return self.get_ena()
+
+    def query_dca(self):
+        self.req_dca()
+        self.wait_updated(1)
+        return self.get_dca()
+
+    def query_dcp(self):
+        self.req_dcp()
+        self.wait_updated(3)
+        return self.get_dcp()
+
+    def query_dcv(self):
+        self.req_dcv()
+        self.wait_updated(4)
+        return self.get_dcv()
+
+    def query_dcr(self):
+        self.req_dcr()
+        self.wait_updated(5)
+        return self.get_dcr()
+
+    def query_mah(self):
+        self.req_mah()
+        self.wait_updated(8)
+        return self.get_mah()
+
+    def query_mwh(self):
+        self.req_mwh()
+        self.wait_updated(9)
+        return self.get_mwh()
+
+    def query_msv_on(self):
+        self.req_msv_on()
+        self.wait_updated(10)
+        return self.get_msv_on()
+
+    def query_msa_on(self):
+        self.req_mas_on()
+        self.wait_updated(11)
+        return self.get_msa_on()
+
+    def query_msv_off(self):
+        self.req_msv_off()
+        self.wait_updated(15)
+        return self.get_msv_off()
+
+    def query_msa_off(self):
+        self.req_msa_off()
+        self.wait_updated(16)
+        return self.get_msa_off()
+
+    def query_rng(self):
+        self.req_rng()
+        self.wait_updated(19)
+        return self.get_rng()
+
+    def query_msw(self):
+        self.req_rng()
+        self.wait_updated(18)
+        return self.get_msw()
+
+    def query_pca(self):
+        self.req_pca()
+        self.wait_updated(21)
+        return self.get_pca()
+
+    def query_ron(self):
+        self.req_ron()
+        self.wait_updated(27)
+        return self.get_ron()
+
+    def query_roff(self):
+        self.req_roff()
+        self.wait_updated(28)
+        return self.get_roff()
+
+    def query_rip(self):
+        self.req_rip()
+        self.wait_updated(29)
+        return self.get_rip()
+
+    def query_dsp(self):
+        self.req_dsp()
+        self.wait_updated(80)
+        return self.get_dsp()
+
+    def query_trm(self):
+        self.req_trm()
+        self.wait_updated(240)
+        return self.get_trm()
+
+    def query_tmp(self):
+        self.req_tmp()
+        self.wait_updated(233)
+        return self.get_tmp()
+
+
+    # Usually called from the connection
+    def recv_subch(self, chid, value, comment):
+        super().recv_subch(chid, value, comment)
+
+        if chid == 0:
+            self.values['ena'] = bool(int(value))
+            self.updated[0] = True
+        elif chid == 1:
+            self.values['dca'] = float(value)
+            self.updated[1] = True
+        elif chid == 3:
+            self.values['dcp'] = float(value)
+            self.updated[3] = True
+        elif chid == 4:
+            self.values['dcv'] = float(value)
+            self.updated[4] = True
+        elif chid == 5:
+            self.values['dcr'] == float(value)
+            self.update[5] = True
+        elif chid == 8:
+            self.values['mah'] == float(value)
+            self.updated[8] = True
+        elif chid == 9:
+            self.values['mwh'] == float(value)
+            self.updated[9] = True
+        elif chid == 10:
+            self.values['msv_on'] = float(value)
+            self.updated[10] = True
+        elif chid == 11:
+            self.values['msa_on'] = float(value)
+            self.updated[11] = True
+        elif chid == 15:
+            self.values['msv_off'] = float(value)
+            self.updated[15] = True
+        elif chid == 16:
+            self.values['msa_off'] = float(value)
+            self.updated[16] = True
+        elif chid == 19:
+            v = int(value)
+
+            if v not in self.RNG_VALUES:
+                raise CommunicationErrorException("rng = %s" % v)
+
+            self.values['rng'] = v
+            self.updated[19] = True
+
+        elif chid == 18:
+            self.values['msw'] = float(value)
+            self.updated[18] = True
+        elif chid == 21:
+            self.values['pca'] = float(value)
+            self.updated[21] = True
+        elif chid == 27:
+            self.values['ron'] = int(value)
+            self.updated[27] = True
+        elif chid == 28:
+            self.values['roff'] = int(value)
+            self.updated[28] = True
+        elif chid == 29:
+            self.values['rip'] = int(value)
+            self.updated[29] = True
+        elif chid == 80:
+            v = int(value)
+
+            if v not in self.DSP_VALUES:
+                raise CommunicationErrorExcpeption("dsp = %s" % v)
+
+            self.values['dsp'] = v
+            self.updated[80] = True
+
+        elif chid == 240:
+            v = int(value)
+
+            if v & ~0x3:
+                raise CommunicationErrorException("trm = %s" % v)
+
+            self.status['trm'] = v
+            self.updated[240] = True
+
+        elif chid == 233:
+            self.values['tmp'] = float(value)
+            self.updated[233] = True
         
 
 # ****************************** Exceptions ******************************
-class NoConnectionException(Exception):
+class LabException(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
+
+class NoConnectionException(LabException):
     def __init__(self):
         super().__init__("No connection associated with this module")
 
 # There is a connection but it's not connected to the lab.
-class NotConnectedException(Exception):
+class NotConnectedException(LabException):
     def __init__(self):
         super().__init__("The connections is not connected.")
 
 
 # To be thrown if that value is not available (yet).
-class NoValueException(Exception):
+class NoValueException(LabException):
     def __init__(self):
         super().__init__("This value is not available (yet).")
 
 # To be thrown if the user specified an invalid parameter value
-class InvalidParameterException(Exception):
+class InvalidParameterException(LabException):
     def __init__(self):
         super().__init__("Invalid parameter")
+
+# To be thrown on erroneous data from a module
+class CommunicationErrorException(LabException):
+    def __init__(self, msg = None):
+        if msg:
+            super().__init__("Commmunication error: %s" % msg)
+        else:
+            super().__init__("Commmunication error")
