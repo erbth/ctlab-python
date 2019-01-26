@@ -1,4 +1,5 @@
 import re
+import time
 import socket
 import fcntl, os, errno
 
@@ -50,6 +51,22 @@ class Connection(object):
 
     def is_connected(self):
         return True
+
+    def identify_modules(self):
+        m = []
+
+        for i in range(16):
+            m.append(Module(i, self))
+            m[i].req_identity()
+
+        time.sleep(1)
+        self.receive()
+
+        for i in range(16):
+            try:
+                print("%s: %s" % (i, m[i].get_identity()))
+            except NoValueException:
+                pass
 
 class TCPIP_Connection(Connection):
     def __init__(self, hostname, port, buffer_size=DEFAULT_BUFFER_SIZE, nonblocking=False):
@@ -188,6 +205,9 @@ class DCG(Module):
     def set_dca(self, dca):
         self.set_subch(1, dca)
 
+    def reset_mah(self):
+        self.set_subch(7, 0)
+
 
     # Asynchronous query functions
     def req_dcv(self):
@@ -195,6 +215,9 @@ class DCG(Module):
 
     def req_dca(self):
         self.req_subch(1)
+
+    def req_mah(self):
+        self.req_subch(7)
 
     def req_msv(self):
         self.req_subch(10)
@@ -230,6 +253,12 @@ class DCG(Module):
         else:
             raise NoValueException()
 
+    def get_mah(self):
+        if 'mah' in self.values:
+            return self.values['mah']
+        else:
+            raise NoValueException()
+
     def get_tmp(self):
         if 'tmp' in self.values:
             return self.values['tmp']
@@ -251,6 +280,11 @@ class DCG(Module):
         self.req_dca()
         self.wait_updated(1)
         return self.get_dca()
+
+    def query_mah(self):
+        self.req_mah()
+        self.wait_updated(7)
+        return self.get_mah()
 
     def query_msv(self):
         self.req_msv()
@@ -308,6 +342,9 @@ class DCG(Module):
         elif chid == 1:
             self.values['dca'] = float(value)
             self.updated[1] = True
+        elif chid == 7:
+            self.values['mah'] = float(value)
+            self.updated[7] = True
         elif chid == 10:
             self.values['msv'] = float(value)
             self.updated[10] = True
@@ -551,10 +588,10 @@ class EDL(Module):
         self.req_subch(5)
 
     def req_mah(self):
-        self.req_subch(8)
+        self.req_subch(7)
 
     def req_mwh(self):
-        self.req_subch(9)
+        self.req_subch(8)
 
     def req_msv_on(self):
         self.req_subch(10)
@@ -748,12 +785,12 @@ class EDL(Module):
 
     def query_mah(self):
         self.req_mah()
-        self.wait_updated(8)
+        self.wait_updated(7)
         return self.get_mah()
 
     def query_mwh(self):
         self.req_mwh()
-        self.wait_updated(9)
+        self.wait_updated(8)
         return self.get_mwh()
 
     def query_msv_on(self):
@@ -762,7 +799,7 @@ class EDL(Module):
         return self.get_msv_on()
 
     def query_msa_on(self):
-        self.req_mas_on()
+        self.req_msa_on()
         self.wait_updated(11)
         return self.get_msa_on()
 
@@ -782,7 +819,7 @@ class EDL(Module):
         return self.get_rng()
 
     def query_msw(self):
-        self.req_rng()
+        self.req_msw()
         self.wait_updated(18)
         return self.get_msw()
 
@@ -827,7 +864,7 @@ class EDL(Module):
         super().recv_subch(chid, value, comment)
 
         if chid == 0:
-            self.values['ena'] = bool(int(value))
+            self.values['ena'] = float(value) > 0.5
             self.updated[0] = True
         elif chid == 1:
             self.values['dca'] = float(value)
@@ -839,14 +876,14 @@ class EDL(Module):
             self.values['dcv'] = float(value)
             self.updated[4] = True
         elif chid == 5:
-            self.values['dcr'] == float(value)
+            self.values['dcr'] = float(value)
             self.update[5] = True
+        elif chid == 7:
+            self.values['mah'] = float(value)
+            self.updated[7] = True
         elif chid == 8:
-            self.values['mah'] == float(value)
+            self.values['mwh'] = float(value)
             self.updated[8] = True
-        elif chid == 9:
-            self.values['mwh'] == float(value)
-            self.updated[9] = True
         elif chid == 10:
             self.values['msv_on'] = float(value)
             self.updated[10] = True
