@@ -1,7 +1,8 @@
-import re
-import time
-import socket
 import fcntl, os, errno
+import re
+import select
+import socket
+import time
 
 DEFAULT_BUFFER_SIZE = 4096
 
@@ -45,6 +46,12 @@ class Connection(object):
 
             if mid in self.modules:
                 self.modules[mid].recv_subch(chid, value, comment)
+
+    def flush(self):
+        """
+        Discard any buffered incoming data
+        """
+        pass
 
     def close(self):
         pass
@@ -120,6 +127,13 @@ class TCPIP_Connection(Connection):
             else:
                 self.buffer = self.buffer + line
 
+    def flush(self):
+        if self.socket:
+            while select.select([self.socket.fileno()], [], [], 0)[0]:
+                self.socket.recv(10)
+        else:
+            raise NoConnectionException()
+
     def close(self):
         if self.socket:
             self.socket.close()
@@ -129,7 +143,7 @@ class TCPIP_Connection(Connection):
         return True if self.socket else False
 
 class Module(object):
-    def __init__(self, id, connection=None):
+    def __init__(self, id, connection=None, allowed_cal_args=None):
         self.id = id
         self.connection = connection
 
@@ -139,17 +153,21 @@ class Module(object):
         if connection:
             connection.add_module(self)
 
+        self._wen = False
+        self._allowed_cal_args = set(allowed_cal_args) \
+                if allowed_cal_args else set()
+
     def send(self, data):
         if self.connection:
             self.connection.send(self.id, data)
         else:
             raise NoConnectionException()
 
-    def set_subch(self, chid, value):
+    def set_subch(self, chid, value, request_response=False):
         if isinstance(value, float):
             value = "{0:.10f}".format(value)
 
-        self.send("%s=%s" % (chid, value))
+        self.send("%s=%s%s" % (chid, value, '!' if request_response else ''))
 
     def req_subch(self, chid):
         self.send("%s?" % chid)
@@ -176,6 +194,9 @@ class Module(object):
         return self.get_identity()
 
     def recv_subch(self, chid, value, comment):
+        self.values[chid] = int(value) if chid in [255] else value
+        self.updated[chid] = True
+
         if chid == 254:
             self.values['firmware'] = value
             self.values['name'] = comment
@@ -189,10 +210,106 @@ class Module(object):
         while not self.updated[chid]:
             self.connection.receive()
 
+    def send_wen(self):
+        """
+        Send a WEN=1! if enable_wen() has been called (and disable_wen() not
+        afterwards...), otherwise send a WEN=0!
+        """
+        if self._wen:
+            self.send("wen=1!")
+            self.wait_updated(255)
+            if self.values[255] & 16 != 16:
+                raise RuntimeError("Failed to enable EEPROM write: '%s'" % self.values[255])
+
+    def enable_wen(self):
+        self._wen = True
+
+    def disable_wen(self):
+        self._wen = False
+
+
+    # Callibration
+    def _ofs(self, arg):
+        if arg not in self._allowed_cal_args:
+            raise ValueError("Invalid argument")
+
+        self.connection.flush()
+
+        arg += 100
+        self.req_subch(arg)
+        self.wait_updated(arg)
+        return self.values[arg]
+
+    def _scl(self, arg):
+        if arg not in self._allowed_cal_args:
+            raise ValueError("Invalid argument")
+
+        self.connection.flush()
+
+        arg += 200
+        self.req_subch(arg)
+        self.wait_updated(arg)
+        return self.values[arg]
+
+    def _set_ofs(self, arg, val):
+        if arg not in self._allowed_cal_args:
+            raise ValueError("Invalid argument")
+
+        self.send_wen()
+        self.connection.flush()
+
+        arg += 100
+        self.set_subch(arg, val, True)
+        self.wait_updated(255)
+
+        if self.values[255] & 0x5f != 0:
+            raise RuntimeError("Failed to set value: '%s'" % self.values[255])
+
+    def _set_scl(self, arg, val):
+        if arg not in self._allowed_cal_args:
+            raise ValueError("Invalid argument")
+
+        self.send_wen()
+        self.connection.flush()
+
+        arg += 200
+        self.set_subch(arg, val, True)
+        self.wait_updated(255)
+
+        if self.values[255] & 0x5f != 0:
+            raise RuntimeError("Failed to set value: '%s'" % self.values[255])
+
+
+    def __getattr__(self, name):
+        match = re.match(r'^ofs_?(\d+)$', name)
+        if match:
+            return self._ofs(int(match[1]))
+
+        match = re.match(r'^scl_?(\d+)$', name)
+        if match:
+            return self._scl(int(match[1]))
+
+        raise AttributeError
+
+    def __setattr__(self, name, value):
+        match = re.match(r'^ofs_?(\d+)$', name)
+        if match:
+            self._set_ofs(int(match[1]), value)
+            return
+
+        match = re.match(r'^scl_?(\d+)$', name)
+        if match:
+            self._set_scl(int(match[1]), value)
+            return
+
+        super().__setattr__(name, value)
+
 
 class DCG(Module):
     def __init__(self, id, connection=None):
-        super().__init__(id, connection=connection)
+        super().__init__(id, connection=connection,
+                allowed_cal_args=[0,1,2,3,4,5, 10,11,12,13,14,15])
+
         self.status = {
             'iconst' : False
         }
@@ -202,8 +319,14 @@ class DCG(Module):
     def set_dcv(self, dcv):
         self.set_subch(0, dcv)
 
+    def set_pcv(self, pcv):
+        self.set_subch(20, pcv)
+
     def set_dca(self, dca):
         self.set_subch(1, dca)
+
+    def set_pca(self, pca):
+        self.set_subch(21, pca)
 
     def reset_mah(self):
         self.set_subch(7, 0)
@@ -332,31 +455,25 @@ class DCG(Module):
     def display_power(self):
         self.set_subch(80, 7)
 
+
     # Usually called from the connection
     def recv_subch(self, chid, value, comment):
         super().recv_subch(chid, value, comment)
 
         if chid == 0:
             self.values['dcv'] = float(value)
-            self.updated[0] = True
         elif chid == 1:
             self.values['dca'] = float(value)
-            self.updated[1] = True
         elif chid == 7:
             self.values['mah'] = float(value)
-            self.updated[7] = True
         elif chid == 10:
             self.values['msv'] = float(value)
-            self.updated[10] = True
         elif chid == 11:
             self.values['msa'] = float(value)
-            self.updated[11] = True
         elif chid == 233:
             self.values['tmp'] = float(value)
-            self.updated[233] = True
         elif chid == 255:
             self.status['iconst'] = True if re.match(r'.*ICONST.*', comment) else False
-            self.updated[255] = True
 
 class ADA_IO(Module):
     def __init__(self, id, connection=None):
@@ -506,7 +623,8 @@ class EDL(Module):
             DSP_TRACK)
 
     def __init__(self, id, connection = None):
-        super().__init__(id, connection = connection)
+        super().__init__(id, connection = connection,
+                allowed_cal_args=[2,3,4,5, 10,11,12,13,14,15])
         self.status = {
                 'trm': 0
                 }
